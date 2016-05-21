@@ -4,14 +4,20 @@ import scala.language.implicitConversions
 import scalaz.Scalaz._
 import scalaz.{Order, Ordering}
 
-sealed trait BallotNumber
+sealed trait BallotNumber {
+  def +(rhs: Int): BallotNumber
+}
 
 /**
   * @author Daniyar Itegulov
   */
-case class BallotNumberReal(int: Int) extends BallotNumber
+case class BallotNumberReal(int: Int) extends BallotNumber {
+  override def +(rhs: Int): BallotNumber = BallotNumberReal(int + rhs)
+}
 
-case class BallotNumberBottom() extends BallotNumber
+case class BallotNumberBottom() extends BallotNumber {
+  override def +(rhs: Int): BallotNumber = BallotNumberReal(0)
+}
 
 object BallotNumber {
   val ⊥ = BallotNumberBottom()
