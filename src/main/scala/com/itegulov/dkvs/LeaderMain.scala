@@ -23,6 +23,7 @@ object LeaderMain extends App {
     println(s"${args(0)} is not a valid number")
     sys.exit(1)
   })
+  System.setProperty("node", s"leader_$nodeNumber")
   val dkvsConfig = ConfigFactory.load("dkvs")
   Configs[Address].get(dkvsConfig, s"dkvs.leaders.$nodeNumber") match {
     case Success(address) =>
