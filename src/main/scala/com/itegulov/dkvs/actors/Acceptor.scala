@@ -20,7 +20,7 @@ class Acceptor(val acceptorId: Int) extends Actor with ActorLogging {
       sender ! ("p1b", acceptorId, ballotNumber, BallotProposals(accepted.toSet))
     case ("p2a", ballotProposal: BallotProposal) =>
       log.info(s"New p2a request with ($ballotProposal) arguments")
-      if (ballotProposal.ballot eq ballotNumber) accepted += ballotProposal
+      if (ballotProposal.ballot == ballotNumber) accepted += ballotProposal
       sender ! ("p2b", acceptorId, ballotNumber)
     case other =>
       log.warning(s"Got something strange: $other")

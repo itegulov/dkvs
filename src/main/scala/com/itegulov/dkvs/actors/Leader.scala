@@ -40,13 +40,14 @@ class Leader(id: Int,
   override def receive: Receive = {
     case ("propose", slot: Int, command: Command) =>
       log.info(s"New propose request with ($slot, $command) arguments")
-      if (proposals.contains(slot)) {
+      if (!proposals.contains(slot)) {
         proposals += slot -> command
         if (active) {
           system.actorOf(Props(new Commander(BallotProposal(ballotNumber, slot, command), acceptorsAddresses, replicasAddresses, self)))
         }
       }
     case ("adopted", ballot: BallotNumber, BallotProposals(pvalues)) =>
+      log.info(s"New adopted response with ($ballot, $pvalues) arguments")
       proposals = proposals ◁ pmax(pvalues)
       proposals.foreach {
         case (slot, command) =>
@@ -54,6 +55,7 @@ class Leader(id: Int,
       }
       active = true
     case ("preempted", ballot: BallotNumber) =>
+      log.info(s"New preempted response with ($ballot) arguments")
       if (ballot > ballotNumber) {
         active = false
         ballotNumber = ballot + 1

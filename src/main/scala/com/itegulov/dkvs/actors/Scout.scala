@@ -12,6 +12,8 @@ class Scout(ballotNumber: BallotNumber, acceptorsAddresses: Seq[Address], leader
   private val pvalues = mutable.Set.empty[BallotProposal]
   private val waitFor = mutable.Set(acceptorsAddresses.indices: _*)
 
+  log.info(s"New scout has been created with ($ballotNumber, $acceptorsAddresses, $leader) arguments")
+
   val acceptors = acceptorsAddresses.zipWithIndex.map {
     case (address, i) =>
       context.actorSelection(s"akka.tcp://Acceptors@${address.hostname}:${address.port}/user/Acceptor$i")
@@ -24,7 +26,7 @@ class Scout(ballotNumber: BallotNumber, acceptorsAddresses: Seq[Address], leader
   override def receive: Receive = {
     case ("p1b", acceptorId: Int, ballot: BallotNumber, BallotProposals(accepted)) =>
       log.info(s"New p1b response with ($acceptorId, $ballot, $accepted) arguments")
-      if (ballotNumber eq ballot) {
+      if (ballotNumber == ballot) {
         pvalues ++= accepted
         waitFor -= acceptorId
         if (waitFor.size <= acceptorsAddresses.size / 2) {
