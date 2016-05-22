@@ -1,9 +1,9 @@
 package com.itegulov.dkvs.actors
 
 import akka.actor.{Actor, ActorLogging, ActorSystem, Props}
-import com.itegulov.dkvs.structure.{Address, BallotNumber, BallotProposal, BallotProposals}
-import scalaz.Scalaz._
+import com.itegulov.dkvs.structure._
 
+import scalaz.Scalaz._
 import scala.collection.mutable
 
 /**
@@ -14,12 +14,12 @@ class Leader(id: Int,
              replicasAddresses: Seq[Address])(implicit system: ActorSystem) extends Actor with ActorLogging {
   var ballotNumber: BallotNumber = 0
   var active = false
-  var proposals = Map.empty[Int, Int]
+  var proposals = Map.empty[Int, Command]
 
   system.actorOf(Props(new Scout(ballotNumber, acceptorsAddresses, self)))
 
-  private def pmax(pvalues: Set[BallotProposal]): Map[Int, Int] = {
-    val map = mutable.Map.empty[Int, mutable.Set[(BallotNumber, Int)]]
+  private def pmax(pvalues: Set[BallotProposal]): Map[Int, Command] = {
+    val map = mutable.Map.empty[Int, mutable.Set[(BallotNumber, Command)]]
     for (BallotProposal(ballot, slot, command) <- pvalues) {
       if (!map.contains(slot)) map += slot -> mutable.Set.empty
       map(slot) += ballot -> command
@@ -39,7 +39,7 @@ class Leader(id: Int,
   }
 
   override def receive: Receive = {
-    case ("propose", slot: Int, command: Int) =>
+    case ("propose", slot: Int, command: Command) =>
       log.info(s"New propose request with ($slot, $command) arguments")
       if (proposals.contains(slot)) {
         proposals += slot -> command
