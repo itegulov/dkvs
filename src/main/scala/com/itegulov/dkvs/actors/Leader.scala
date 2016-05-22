@@ -3,7 +3,6 @@ package com.itegulov.dkvs.actors
 import akka.actor.{Actor, ActorLogging, ActorSystem, Props}
 import com.itegulov.dkvs.structure._
 
-import scalaz.Scalaz._
 import scala.collection.mutable
 
 /**
@@ -55,7 +54,7 @@ class Leader(id: Int,
       }
       active = true
     case ("preempted", ballot: BallotNumber) =>
-      if (ballot gt ballotNumber) {
+      if (ballot > ballotNumber) {
         active = false
         ballotNumber = ballot + 1
         system.actorOf(Props(new Scout(ballotNumber, acceptorsAddresses, self)))

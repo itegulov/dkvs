@@ -11,6 +11,5 @@ libraryDependencies ++= Seq(
   "com.typesafe.scala-logging" %% "scala-logging" % "3.4.0",
   "com.typesafe.akka" %% "akka-actor" % "2.4.6",
   "com.typesafe.akka" %% "akka-remote" % "2.4.6",
-  "org.scalaz" %% "scalaz-core" % "7.2.2",
   "com.github.kxbmap" %% "configs" % "0.4.2"
 )
