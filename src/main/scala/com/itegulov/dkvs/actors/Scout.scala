@@ -12,16 +12,15 @@ class Scout(ballotNumber: BallotNumber, acceptorsAddresses: Seq[Address], leader
   private val pvalues = mutable.Set.empty[BallotProposal]
   private val waitFor = mutable.Set(acceptorsAddresses.indices: _*)
 
-  log.info(s"New scout has been created with ($ballotNumber, $acceptorsAddresses, $leader) arguments")
-
   val acceptors = acceptorsAddresses.zipWithIndex.map {
     case (address, i) =>
       context.actorSelection(s"akka.tcp://Acceptors@${address.hostname}:${address.port}/user/Acceptor$i")
   }
 
-  acceptors.foreach(acceptor => {
-    acceptor ! ("p1a", ballotNumber)
-  })
+  override def preStart(): Unit = {
+    log.info(s"New scout has been created with ($ballotNumber, $acceptorsAddresses, $leader) arguments")
+    acceptors.foreach(_ ! ("p1a", ballotNumber))
+  }
 
   override def receive: Receive = {
     case ("p1b", acceptorId: Int, ballot: BallotNumber, BallotProposals(accepted)) =>

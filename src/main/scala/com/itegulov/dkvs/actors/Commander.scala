@@ -14,9 +14,6 @@ class Commander(ballotProposal: BallotProposal,
                 leader: ActorRef) extends Actor with ActorLogging {
   private val waitFor = mutable.Set(acceptorsAddresses.indices: _*)
 
-  log.info(s"New commander has been created with " +
-    s"($ballotProposal, $acceptorsAddresses, $replicasAddresses, $leader) arguments")
-
   val acceptors = acceptorsAddresses.zipWithIndex.map {
     case (address, i) =>
       context.actorSelection(s"akka.tcp://Acceptors@${address.hostname}:${address.port}/user/Acceptor$i")
@@ -27,9 +24,11 @@ class Commander(ballotProposal: BallotProposal,
       context.actorSelection(s"akka.tcp://Replicas@${address.hostname}:${address.port}/user/Replica$i")
   }
 
-  acceptors.foreach(acceptor => {
-    acceptor ! ("p2a", ballotProposal)
-  })
+  override def preStart(): Unit = {
+    log.info("New commander has been created with " +
+      s"($ballotProposal, $acceptorsAddresses, $replicasAddresses, $leader) arguments")
+    acceptors.foreach(_ ! ("p2a", ballotProposal))
+  }
 
   override def receive: Receive = {
     case ("p2b", acceptorId: Int, ballot: BallotNumber) =>
