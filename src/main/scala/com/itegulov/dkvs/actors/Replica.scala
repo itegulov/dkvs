@@ -1,9 +1,11 @@
 package com.itegulov.dkvs.actors
 
-import java.util.UUID
+import java.io._
+import java.util.{Scanner, UUID}
 
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem}
 import com.itegulov.dkvs.structure.{Address, Command, DeleteCommand, SetCommand}
+import resource._
 
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -14,7 +16,8 @@ import scala.language.postfixOps
 /**
   * @author Daniyar Itegulov
   */
-class Replica(system: ActorSystem,
+class Replica(id: Int,
+              system: ActorSystem,
               leadersAddresses: Seq[Address]) extends Actor with ActorLogging {
   val state = mutable.Map.empty[String, String]
   var slotIn = 1
@@ -56,6 +59,7 @@ class Replica(system: ActorSystem,
             state += key -> value
             val client = clientIdToActor.get(clientId)
             client.foreach(_ ! ("setAnswer", "stored"))
+            println(s"set $key $value")
           case DeleteCommand(key, clientId) =>
             val client = clientIdToActor.get(clientId)
             if (state.contains(key)) {
@@ -64,10 +68,39 @@ class Replica(system: ActorSystem,
             } else {
               client.foreach(_ ! ("deleteAnswer", "notFound"))
             }
+            println(s"delete $key")
         }
         log.info(s"Performed $command")
         slotOut += 1
     }
+  }
+
+
+  @scala.throws[Exception](classOf[Exception])
+  override def preStart(): Unit = {
+    try {
+      for {
+        in <- managed(new Scanner(new FileInputStream(s"log/dkvs_replica_$id.log")))
+      } {
+        while (in.hasNextLine) {
+          val line = in.nextLine()
+          if (line.startsWith("set")) {
+            val r = """^set (.*) (.*)$""".r
+            val r(key, value) = line
+            state += key -> value
+          } else if (line.startsWith("delete")) {
+            val r = """^delete (.*)$""".r
+            val r(key) = line
+            state -= key
+          }
+        }
+      }
+    } catch {
+      case e: FileNotFoundException =>
+        log.info("No previous actions log file: creating a new one")
+        new File(s"log/dkvs_replica_$id.log").createNewFile()
+    }
+    System.setOut(new PrintStream(new FileOutputStream(s"log/dkvs_replica_$id.log", true)))
   }
 
   override def receive: Receive = {

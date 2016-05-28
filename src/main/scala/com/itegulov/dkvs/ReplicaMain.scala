@@ -31,6 +31,13 @@ object ReplicaMain extends App {
   })
   System.setProperty("node", s"replica_$nodeNumber")
   val dkvsConfig = ConfigFactory.load("dkvs")
+  val t = Configs[Int].get(dkvsConfig, "dkvs.timeout") match {
+    case Success(time) => time
+    case _ =>
+      println("Timeout wasn't speicified")
+      sys.exit(1)
+  }
+  implicit val timeout = Timeout(t millis)
   Configs[Address].get(dkvsConfig, s"dkvs.replicas.$nodeNumber") match {
     case Success(address) =>
 
@@ -45,12 +52,10 @@ object ReplicaMain extends App {
 
       implicit val system = ActorSystem("Replicas", replicaConfig)
       implicit val materializer = ActorMaterializer()
-      val replicaActor = system.actorOf(Props(new Replica(system, leadersAddresses)), name = s"Replica$nodeNumber")
+      val replicaActor = system.actorOf(Props(new Replica(nodeNumber, system, leadersAddresses)), name = s"Replica$nodeNumber")
 
       val connections: Source[IncomingConnection, Future[ServerBinding]] = Tcp().bind(address.hostname, 13000 + nodeNumber)
       connections runForeach { connection =>
-        println(s"New connection from: ${connection.remoteAddress}")
-
         implicit val timeout = Timeout(5 seconds)
 
         val echo = Flow[ByteString]
@@ -59,11 +64,9 @@ object ReplicaMain extends App {
             maximumFrameLength = 256,
             allowTruncation = true))
           .map(_.utf8String)
-          .map(request => {
-            if (request.startsWith("get")) {
-              val r = """^get (.*)$""".r
-              val r(key) = request
-              val future = replicaActor ? ("get", key)
+          .map {
+            case GetRequest(key) =>
+              val future = replicaActor ?("get", key)
               val result = Await.result(future, Duration.Inf).asInstanceOf[(String, Any)]
               result match {
                 case ("getAnswer", answer: String) =>
@@ -73,10 +76,8 @@ object ReplicaMain extends App {
                 case _ =>
                   "INVALID_STATE"
               }
-            } else if (request.startsWith("set")) {
-              val r = """^set (.*) (.*)$""".r
-              val r(key, value) = request
-              val future = replicaActor ? ("set", key, value)
+            case SetRequest(key, value) =>
+              val future = replicaActor ?("set", key, value)
               val result = Await.result(future, Duration.Inf).asInstanceOf[(String, String)]
               result match {
                 case ("setAnswer", "stored") =>
@@ -84,10 +85,8 @@ object ReplicaMain extends App {
                 case _ =>
                   "INVALID_STATE"
               }
-            } else if (request.startsWith("delete")) {
-              val r = """^delete (.*)$""".r
-              val r(key) = request
-              val future = replicaActor ? ("delete", key)
+            case DeleteRequest(key) =>
+              val future = replicaActor ?("delete", key)
               val result = Await.result(future, Duration.Inf).asInstanceOf[(String, String)]
               result match {
                 case ("deleteAnswer", "deleted") =>
@@ -97,12 +96,11 @@ object ReplicaMain extends App {
                 case _ =>
                   "INVALID_STATE"
               }
-            } else if (request == "ping") {
+            case PingRequest() =>
               "PONG"
-            } else {
+            case _ =>
               "INVALID_REQUEST"
-            }
-          })
+          }
           .map(_ + "\n")
           .map(ByteString(_))
 
@@ -114,5 +112,38 @@ object ReplicaMain extends App {
       println(s"Couldn't find configuration for replica $nodeNumber:")
       error.messages.foreach(println)
       sys.exit(1)
+  }
+
+  object GetRequest {
+    def unapply(s: String): Option[String] = {
+      if (s.startsWith("get ")) Some(s.stripPrefix("get "))
+      else None
+    }
+  }
+
+  object SetRequest {
+    def unapply(s: String): Option[(String, String)] = {
+      if (s.startsWith("set ")) {
+        val args = s.stripPrefix("set ").split(" ")
+        if (args.length != 2) {
+          None
+        } else {
+          Some(args(0), args(1))
+        }
+      } else {
+        None
+      }
+    }
+  }
+
+  object DeleteRequest {
+    def unapply(s: String): Option[String] = {
+      if (s.startsWith("delete ")) Some(s.stripPrefix("delete "))
+      else None
+    }
+  }
+
+  object PingRequest {
+    def unapply(s: String): Boolean = s == "ping"
   }
 }
