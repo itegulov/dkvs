@@ -1,6 +1,7 @@
 package com.itegulov.dkvs.actors
 
 import akka.actor.{Actor, ActorLogging, ActorSystem, Props}
+import akka.util.Timeout
 import com.itegulov.dkvs.structure._
 
 import scala.collection.mutable
@@ -10,7 +11,9 @@ import scala.collection.mutable
   */
 class Leader(id: Int,
              acceptorsAddresses: Seq[Address],
-             replicasAddresses: Seq[Address])(implicit system: ActorSystem) extends Actor with ActorLogging {
+             replicasAddresses: Seq[Address])
+            (implicit val system: ActorSystem,
+             implicit val timeout: Timeout) extends Actor with ActorLogging {
   var ballotNumber: BallotNumber = 0
   var active = false
   var proposals = Map.empty[Int, Command]

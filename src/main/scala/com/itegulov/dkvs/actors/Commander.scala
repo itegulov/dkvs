@@ -1,9 +1,13 @@
 package com.itegulov.dkvs.actors
 
 import akka.actor.{Actor, ActorLogging, ActorRef}
+import akka.pattern.ask
+import akka.util.Timeout
 import com.itegulov.dkvs.structure.{Address, BallotNumber, BallotProposal}
 
 import scala.collection.mutable
+import scala.concurrent._
+import scala.language.postfixOps
 
 /**
   * @author Daniyar Itegulov
@@ -11,8 +15,10 @@ import scala.collection.mutable
 class Commander(ballotProposal: BallotProposal,
                 acceptorsAddresses: Seq[Address],
                 replicasAddresses: Seq[Address],
-                leader: ActorRef) extends Actor with ActorLogging {
+                leader: ActorRef)(implicit val timeout: Timeout) extends Actor with ActorLogging {
   private val waitFor = mutable.Set(acceptorsAddresses.indices: _*)
+
+  import context.dispatcher
 
   val acceptors = acceptorsAddresses.zipWithIndex.map {
     case (address, i) =>
@@ -30,6 +36,14 @@ class Commander(ballotProposal: BallotProposal,
     acceptors.foreach(_ ! ("p2a", ballotProposal))
   }
 
+  private def retry[T](f: => Future[T])(implicit ec: ExecutionContext): Future[T] = {
+    f recoverWith {
+      case e =>
+        log.warning(s"Retrying to send a message from commander (failed with $e previously)")
+        retry(f)
+    }
+  }
+
   override def receive: Receive = {
     case ("p2b", acceptorId: Int, ballot: BallotNumber) =>
       log.info(s"New p2b response with ($acceptorId, $ballot) arguments")
@@ -38,7 +52,9 @@ class Commander(ballotProposal: BallotProposal,
         log.info(s"${waitFor.size} acceptors still didn't respond out of ${acceptorsAddresses.size}")
         if (waitFor.size <= acceptorsAddresses.size / 2) {
           log.info(s"Decision is accepted by majority of acceptors")
-          replicas.foreach(replica => replica ! ("decision", ballotProposal.slot, ballotProposal.command))
+          replicas.foreach(replica =>
+            retry(replica ? ("decision", ballotProposal.slot, ballotProposal.command))
+          )
           context stop self
         }
       } else {

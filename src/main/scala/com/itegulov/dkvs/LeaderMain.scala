@@ -1,6 +1,7 @@
 package com.itegulov.dkvs
 
 import akka.actor.{ActorSystem, Props}
+import akka.util.Timeout
 import com.itegulov.dkvs.actors.{Leader, Scout}
 import com.itegulov.dkvs.structure.Address
 import com.typesafe.config.{ConfigFactory, ConfigValueFactory}
@@ -8,7 +9,8 @@ import configs.Configs
 import configs.Result.{Failure, Success}
 
 import scala.concurrent.Await
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
+import scala.language.postfixOps
 import scala.util.Try
 
 /**
@@ -25,6 +27,13 @@ object LeaderMain extends App {
   })
   System.setProperty("node", s"leader_$nodeNumber")
   val dkvsConfig = ConfigFactory.load("dkvs")
+  val t = Configs[Int].get(dkvsConfig, "dkvs.timeout") match {
+    case Success(time) => time
+    case _ =>
+      println("Timeout wasn't specified")
+      sys.exit(1)
+  }
+  implicit val timeout = Timeout(t millis)
   Configs[Address].get(dkvsConfig, s"dkvs.leaders.$nodeNumber") match {
     case Success(address) =>
 

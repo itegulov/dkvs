@@ -34,7 +34,7 @@ object ReplicaMain extends App {
   val t = Configs[Int].get(dkvsConfig, "dkvs.timeout") match {
     case Success(time) => time
     case _ =>
-      println("Timeout wasn't speicified")
+      println("Timeout wasn't specified")
       sys.exit(1)
   }
   implicit val timeout = Timeout(t millis)

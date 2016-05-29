@@ -25,6 +25,7 @@ class Replica(id: Int,
   val requests = ArrayBuffer.empty[Command]
   val proposals = mutable.Map.empty[Int, Command]
   val decisions = mutable.Map.empty[Int, Command]
+  val senders = mutable.Map.empty[Int, ActorRef]
   // Helper state
   val clientIdToActor = mutable.WeakHashMap.empty[UUID, ActorRef]
 
@@ -122,15 +123,22 @@ class Replica(id: Int,
       clientIdToActor += clientId -> sender
     case ("decision", slot: Int, command: Command) =>
       log.info(s"New decision request with ($slot, $command) arguments")
-      decisions += slot -> command
-      while (decisions.contains(slotOut)) {
-        proposals.get(slotOut) match {
-          case Some(oldCommand) =>
-            proposals -= slotOut
-            if (oldCommand != command) requests += oldCommand
-          case None =>
+      if (slot < slotOut) {
+        sender ! "acknowledge"
+      } else {
+        decisions += slot -> command
+        senders += slot -> sender
+        while (decisions.contains(slotOut)) {
+          proposals.get(slotOut) match {
+            case Some(oldCommand) =>
+              proposals -= slotOut
+              if (oldCommand != command) requests += oldCommand
+            case None =>
+          }
+          val current = slotOut
+          perform(command)
+          senders(current) ! "acknowledge"
         }
-        perform(command)
       }
     case "propose" =>
       propose()
