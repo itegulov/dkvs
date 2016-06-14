@@ -33,7 +33,7 @@ object AcceptorMain extends App {
         .withValue("akka.remote.netty.tcp.hostname", ConfigValueFactory.fromAnyRef(address.hostname))
 
       implicit val system = ActorSystem("Acceptors", acceptorConfig)
-      val acceptorActor = system.actorOf(Props(new Acceptor(0)), name = s"Acceptor$nodeNumber")
+      val acceptorActor = system.actorOf(Props(new Acceptor(nodeNumber)), name = s"Acceptor$nodeNumber")
 
       Await.ready(system.whenTerminated, Duration.Inf)
     case Failure(error) =>
