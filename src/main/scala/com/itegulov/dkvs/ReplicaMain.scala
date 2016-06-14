@@ -56,17 +56,15 @@ object ReplicaMain extends App {
 
       val connections: Source[IncomingConnection, Future[ServerBinding]] = Tcp().bind(address.hostname, 13000 + nodeNumber)
       connections runForeach { connection =>
-        implicit val timeout = Timeout(5 seconds)
-
         val echo = Flow[ByteString]
           .via(Framing.delimiter(
-            ByteString("\n"),
+            ByteString("\r\n"),
             maximumFrameLength = 256,
             allowTruncation = true))
           .map(_.utf8String)
           .map {
             case GetRequest(key) =>
-              val future = replicaActor ?("get", key)
+              val future = replicaActor ? ("get", key)
               val result = Await.result(future, Duration.Inf).asInstanceOf[(String, Any)]
               result match {
                 case ("getAnswer", answer: String) =>
@@ -77,7 +75,7 @@ object ReplicaMain extends App {
                   "INVALID_STATE"
               }
             case SetRequest(key, value) =>
-              val future = replicaActor ?("set", key, value)
+              val future = replicaActor ? ("set", key, value)
               val result = Await.result(future, Duration.Inf).asInstanceOf[(String, String)]
               result match {
                 case ("setAnswer", "stored") =>
@@ -86,7 +84,7 @@ object ReplicaMain extends App {
                   "INVALID_STATE"
               }
             case DeleteRequest(key) =>
-              val future = replicaActor ?("delete", key)
+              val future = replicaActor ? ("delete", key)
               val result = Await.result(future, Duration.Inf).asInstanceOf[(String, String)]
               result match {
                 case ("deleteAnswer", "deleted") =>
