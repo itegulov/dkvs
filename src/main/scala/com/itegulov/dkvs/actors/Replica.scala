@@ -1,16 +1,15 @@
 package com.itegulov.dkvs.actors
 
 import java.io._
-import java.util.{Scanner, UUID}
+import java.util.UUID
 
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem}
 import com.itegulov.dkvs.structure.{Address, Command, DeleteCommand, SetCommand}
-import resource._
 
-import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
 import scala.io.Source
 import scala.language.postfixOps
 
@@ -90,14 +89,12 @@ class Replica(id: Int,
     var read = 0
     for (line <- lines) {
       line match {
-        case r"^set (.*)$key (.*)$value" => {
+        case r"^set (.*)$key (.*)$value" =>
           state += key -> value
           read += 1
-        }
-        case r"^delete (.*)$key" => {
+        case r"^delete (.*)$key" =>
           state -= key
           read += 1
-        }
         case _ => throw new IllegalStateException("Log is malformed")
       }
     }
