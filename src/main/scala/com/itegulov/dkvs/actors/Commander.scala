@@ -1,12 +1,10 @@
 package com.itegulov.dkvs.actors
 
 import akka.actor.{Actor, ActorLogging, ActorRef}
-import akka.pattern.ask
 import akka.util.Timeout
 import com.itegulov.dkvs.structure.{Address, BallotNumber, BallotProposal}
 
 import scala.collection.mutable
-import scala.concurrent._
 import scala.language.postfixOps
 
 /**
@@ -14,34 +12,19 @@ import scala.language.postfixOps
   */
 class Commander(ballotProposal: BallotProposal,
                 acceptorsAddresses: Seq[Address],
-                replicasAddresses: Seq[Address],
-                leader: ActorRef)(implicit val timeout: Timeout) extends Actor with ActorLogging {
+                leader: ActorRef,
+                resender: ActorRef)(implicit val timeout: Timeout) extends Actor with ActorLogging {
   private val waitFor = mutable.Set(acceptorsAddresses.indices: _*)
-
-  import context.dispatcher
 
   val acceptors = acceptorsAddresses.zipWithIndex.map {
     case (address, i) =>
       context.actorSelection(s"akka.tcp://Acceptors@${address.hostname}:${address.port}/user/Acceptor$i")
   }
 
-  val replicas = replicasAddresses.zipWithIndex.map {
-    case (address, i) =>
-      context.actorSelection(s"akka.tcp://Replicas@${address.hostname}:${address.port}/user/Replica$i")
-  }
-
   override def preStart(): Unit = {
     log.info("New commander has been created with " +
-      s"($ballotProposal, $acceptorsAddresses, $replicasAddresses, $leader) arguments")
+      s"($ballotProposal, $acceptorsAddresses, $leader) arguments")
     acceptors.foreach(_ ! ("p2a", ballotProposal))
-  }
-
-  private def retry[T](f: => Future[T])(implicit ec: ExecutionContext): Future[T] = {
-    f recoverWith {
-      case e =>
-        log.warning(s"Retrying to send a message from commander (failed with $e previously)")
-        retry(f)
-    }
   }
 
   override def receive: Receive = {
@@ -52,9 +35,7 @@ class Commander(ballotProposal: BallotProposal,
         log.info(s"${waitFor.size} acceptors still didn't respond out of ${acceptorsAddresses.size}")
         if (waitFor.size <= acceptorsAddresses.size / 2) {
           log.info(s"Decision is accepted by majority of acceptors")
-          replicas.foreach(replica =>
-            retry(replica ? ("decision", ballotProposal.slot, ballotProposal.command))
-          )
+          resender ! ("send", ballotProposal.slot, ballotProposal.command)
           context stop self
         }
       } else {

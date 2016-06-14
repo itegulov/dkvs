@@ -2,7 +2,7 @@ package com.itegulov.dkvs
 
 import akka.actor.{ActorSystem, Props}
 import akka.util.Timeout
-import com.itegulov.dkvs.actors.{Leader, Scout}
+import com.itegulov.dkvs.actors.{Leader, Resender, Scout}
 import com.itegulov.dkvs.structure.Address
 import com.typesafe.config.{ConfigFactory, ConfigValueFactory}
 import configs.Configs
@@ -52,7 +52,8 @@ object LeaderMain extends App {
         .withValue("akka.remote.netty.tcp.hostname", ConfigValueFactory.fromAnyRef(address.hostname))
 
       implicit val system = ActorSystem("Leaders", leaderConfig)
-      val leaderActor = system.actorOf(Props(new Leader(nodeNumber, acceptorsAddresses, replicasAddresses)), name = s"Leader$nodeNumber")
+      val resenderActor = system.actorOf(Props(new Resender(replicasAddresses, system)))
+      val leaderActor = system.actorOf(Props(new Leader(nodeNumber, acceptorsAddresses, resenderActor)), name = s"Leader$nodeNumber")
 
       Await.ready(system.whenTerminated, Duration.Inf)
     case Failure(error) =>

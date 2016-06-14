@@ -1,6 +1,6 @@
 package com.itegulov.dkvs.actors
 
-import akka.actor.{Actor, ActorLogging, ActorSystem, Props}
+import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
 import akka.util.Timeout
 import com.itegulov.dkvs.structure._
 
@@ -11,7 +11,7 @@ import scala.collection.mutable
   */
 class Leader(id: Int,
              acceptorsAddresses: Seq[Address],
-             replicasAddresses: Seq[Address])
+             resender: ActorRef)
             (implicit val system: ActorSystem,
              implicit val timeout: Timeout) extends Actor with ActorLogging {
   var ballotNumber: BallotNumber = 0
@@ -45,17 +45,22 @@ class Leader(id: Int,
       log.info(s"New propose request with ($slot, $command) arguments")
       if (!proposals.contains(slot)) {
         proposals += slot -> command
+        log.info(s"Proposal $slot -> $command was added to proposals queue")
         if (active) {
-          system.actorOf(Props(new Commander(BallotProposal(ballotNumber, slot, command), acceptorsAddresses, replicasAddresses, self)))
+          log.info(s"Creating commander for proposal $slot -> $command")
+          system.actorOf(Props(new Commander(BallotProposal(ballotNumber, slot, command), acceptorsAddresses, self, resender)))
         }
+      } else {
+        log.info(s"Ignoring proposal $slot -> $command because already have command for this slot")
       }
     case ("adopted", ballot: BallotNumber, BallotProposals(pvalues)) =>
       log.info(s"New adopted response with ($ballot, $pvalues) arguments")
       proposals = proposals ◁ pmax(pvalues)
       proposals.foreach {
         case (slot, command) =>
-          system.actorOf(Props(new Commander(BallotProposal(ballotNumber, slot, command), acceptorsAddresses, replicasAddresses, self)))
+          system.actorOf(Props(new Commander(BallotProposal(ballotNumber, slot, command), acceptorsAddresses, self, resender)))
       }
+      """""".r.findAllIn("").map(s => (1, 2)).toSeq
       active = true
     case ("preempted", ballot: BallotNumber) =>
       log.info(s"New preempted response with ($ballot) arguments")
