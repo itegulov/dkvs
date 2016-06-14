@@ -11,6 +11,7 @@ import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.io.Source
 import scala.language.postfixOps
 
 /**
@@ -28,6 +29,7 @@ class Replica(id: Int,
   val senders = mutable.Map.empty[Int, ActorRef]
   // Helper state
   val clientIdToActor = mutable.WeakHashMap.empty[UUID, ActorRef]
+  val logOut = new PrintWriter(new FileOutputStream(s"log/dkvs_replica_$id.log", true), true)
 
   val leaders = leadersAddresses.zipWithIndex.map {
     case (address, i) =>
@@ -42,6 +44,7 @@ class Replica(id: Int,
       if (!decisions.contains(slotIn)) {
         requests.remove(0)
         proposals += slotIn -> command
+        log.info(s"Proposing to leaders $slotIn -> $command")
         leaders.foreach(leader => leader ! ("propose", slotIn, command))
       }
       slotIn += 1
@@ -60,7 +63,7 @@ class Replica(id: Int,
             state += key -> value
             val client = clientIdToActor.get(clientId)
             client.foreach(_ ! ("setAnswer", "stored"))
-            println(s"set $key $value")
+            logOut.println(s"set $key $value")
           case DeleteCommand(key, clientId) =>
             val client = clientIdToActor.get(clientId)
             if (state.contains(key)) {
@@ -69,39 +72,38 @@ class Replica(id: Int,
             } else {
               client.foreach(_ ! ("deleteAnswer", "notFound"))
             }
-            println(s"delete $key")
+            logOut.println(s"delete $key")
         }
         log.info(s"Performed $command")
         slotOut += 1
     }
   }
 
+  implicit class Regex(sc: StringContext) {
+    def r = new util.matching.Regex(sc.parts.mkString, sc.parts.tail.map(_ => "x"): _*)
+  }
 
-  @scala.throws[Exception](classOf[Exception])
+
+  @throws(classOf[Exception])
   override def preStart(): Unit = {
-    try {
-      for {
-        in <- managed(new Scanner(new FileInputStream(s"log/dkvs_replica_$id.log")))
-      } {
-        while (in.hasNextLine) {
-          val line = in.nextLine()
-          if (line.startsWith("set")) {
-            val r = """^set (.*) (.*)$""".r
-            val r(key, value) = line
-            state += key -> value
-          } else if (line.startsWith("delete")) {
-            val r = """^delete (.*)$""".r
-            val r(key) = line
-            state -= key
-          }
+    val lines = Source.fromFile(s"log/dkvs_replica_$id.log").getLines()
+    var read = 0
+    for (line <- lines) {
+      line match {
+        case r"^set (.*)$key (.*)$value" => {
+          state += key -> value
+          read += 1
         }
+        case r"^delete (.*)$key" => {
+          state -= key
+          read += 1
+        }
+        case _ => throw new IllegalStateException("Log is malformed")
       }
-    } catch {
-      case e: FileNotFoundException =>
-        log.info("No previous actions log file: creating a new one")
-        new File(s"log/dkvs_replica_$id.log").createNewFile()
     }
-    System.setOut(new PrintStream(new FileOutputStream(s"log/dkvs_replica_$id.log", true)))
+    slotIn = read + 1
+    slotOut = read + 1
+    log.info(s"Restored from log $read lines")
   }
 
   override def receive: Receive = {
@@ -124,7 +126,7 @@ class Replica(id: Int,
     case ("decision", slot: Int, command: Command) =>
       log.info(s"New decision request with ($slot, $command) arguments")
       if (slot < slotOut) {
-        sender ! "acknowledge"
+        sender ! ("acknowledge", slot, id)
       } else {
         decisions += slot -> command
         senders += slot -> sender
@@ -137,7 +139,7 @@ class Replica(id: Int,
           }
           val current = slotOut
           perform(command)
-          senders(current) ! "acknowledge"
+          senders(current) ! ("acknowledge", slot, id)
         }
       }
     case "propose" =>
