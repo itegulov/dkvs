@@ -28,6 +28,7 @@ class Scout(ballotNumber: BallotNumber, acceptorsAddresses: Seq[Address], leader
       if (ballotNumber == ballot) {
         pvalues ++= accepted
         waitFor -= acceptorId
+        log.info(s"Left ${waitFor.size} out of ${acceptorsAddresses.size}")
         if (waitFor.size <= acceptorsAddresses.size / 2) {
           leader ! ("adopted", ballot, BallotProposals(pvalues.toSet))
           context stop self
