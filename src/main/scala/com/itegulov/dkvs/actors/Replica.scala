@@ -35,7 +35,7 @@ class Replica(id: Int,
       context.actorSelection(s"akka.tcp://Leaders@${address.hostname}:${address.port}/user/Leader$i")
   }
 
-  system.scheduler.schedule(0 seconds, 30 millis, self, "propose") // FIXME: dirty hack to do some background work
+  system.scheduler.schedule(0 seconds, 30 millis, self, "propose")
 
   private def propose(): Unit = {
     while (slotIn < slotOut + 10 && requests.nonEmpty) {

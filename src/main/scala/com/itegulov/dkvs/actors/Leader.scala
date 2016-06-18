@@ -60,7 +60,6 @@ class Leader(id: Int,
         case (slot, command) =>
           system.actorOf(Props(new Commander(BallotProposal(ballotNumber, slot, command), acceptorsAddresses, self, resender)))
       }
-      """""".r.findAllIn("").map(s => (1, 2)).toSeq
       active = true
     case ("preempted", ballot: BallotNumber) =>
       log.info(s"New preempted response with ($ballot) arguments")

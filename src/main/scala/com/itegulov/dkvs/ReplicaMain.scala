@@ -58,7 +58,7 @@ object ReplicaMain extends App {
       connections runForeach { connection =>
         val echo = Flow[ByteString]
           .via(Framing.delimiter(
-            ByteString("\r\n"),
+            ByteString("\n"),
             maximumFrameLength = 256,
             allowTruncation = true))
           .map(_.utf8String)
